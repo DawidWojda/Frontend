@@ -1,6 +1,6 @@
-def imageName="192.168.44.44:8082/docker-local/frontend"
-def dockerRegistry="https://192.168.44.44:8082"
-def registryCredentials="artifactory"
+def imageName="dawidwoj/frontend"
+def dockerRegistry=""
+def registryCredentials="Dockerhub"
 def dockerTag=""
 
 pipeline {
