@@ -1,47 +1,50 @@
-def imageName="dawidwoj/frontend"
-def dockerRegistry=""
-def registryCredentials="Dockerhub"
+def imageName="192.168.44.44:8082/docker-local/frontend"
+def dockerRegistry="https://192.168.44.44:8082"
+def registryCredentials="artifactory"
 def dockerTag=""
 
 pipeline {
-  agent {
-    label 'agent'
+    agent {
+        label 'agent'
     }
+    
     environment {
-      scannerHome = tool 'SonarQube'
+        scanerHome = tool 'SonarQube'
     }
-    stages{
-      stage('Git pull'){ 
-        steps {
-         //  git branch: 'main', url: 'https://github.com/DawidWojda/Frontend'
-         checkout scm
-         }
-      }
-      stage('test'){
-        steps {
-            sh 'ls'
-            sh 'pip3 install -r requirements.txt'
-            sh 'python3 -m pytest --cov=. --cov-report xml:test-results/coverage.xml --junitxml=test-results/pytest-report.xml'
-         }
-      } 
-      stage('SonarQube') {
-        steps {
-            withSonarQubeEnv('SonarQube') {
-                sh "${scannerHome}/bin/sonar-scanner"
-             }
-             timeout(time: 1, unit: 'MINUTES') {
-                waitForQualityGate abortPipeline: true
-             }
+    
+    stages {
+        stage('Git checkout scm') {
+            steps {
+            	checkout scm
+		}
         }
-      }
-    stage('Build application image') {
-        steps {
-            script {
-                  // Prepare basic image for application
-                  dockerTag = "RC-${env.BUILD_ID}"
-                  applicationImage = docker.build("$imageName:$dockerTag",".")
+
+        stage('Unit tests') {
+            steps {
+                sh 'pip3 install -r requirements.txt'
+                sh 'python3 -m pytest --cov=. --cov-report xml:test-results/coverage.xml --junitxml=test-results/pytest-report.xml'
             }
-          }
+        }
+        
+        stage('SonarQube') {
+            steps {
+                withSonarQubeEnv("SonarQube") {
+                    sh "${scanerHome}/bin/sonar-scanner"
+                }
+                timeout(time:1, unit: 'MINUTES'){
+                    waitForQualityGate abortPipeline: true   
+                }
+            }
+        }
+        
+        stage('Docker') {
+            steps {
+                script{
+                    dockerTag = "RC-${env.BUILD_ID}.${env.GIT_COMMIT.take(7)}"
+                    //.${env.GIT_COMMIT.take(7)}
+                    applicationImage=docker.build("$imageName:$dockerTag", ".")
+                }
+            }
         }
         
         stage('Pushing image to Artifactory') {
@@ -55,13 +58,10 @@ pipeline {
             }
         }
     }
-    post {
+    post{
         always {
             junit testResults: "test-results/*.xml"
             cleanWs()
-        }
-        success {
-            build job: 'app_of_apps', parameters: [ string(name: 'frontendDockerTag', value: "$dockerTag")], wait: false
         }
     }
 }
